@@ -222,7 +222,15 @@ class GGUFWriter:
         for fout, tensors, kv_data in zip(self.fout, self.tensors, self.kv_data):
             fout.write(self._pack("<I", GGUF_MAGIC, skip_pack_prefix = True))
             fout.write(self._pack("I", GGUF_VERSION))
+<<<<<<< HEAD
+<<<<<<< HEAD
+            fout.write(self._pack("Q", len([k for k in tensors.keys() if not k.endswith("_scale")])))
+=======
             fout.write(self._pack("Q", len(tensors)))
+>>>>>>> master
+=======
+            fout.write(self._pack("Q", len([k for k in tensors.keys() if not k.endswith("_scale")])))
+>>>>>>> ahead
             fout.write(self._pack("Q", len(kv_data)))
             fout.flush()
         self.state = WriterState.HEADER
@@ -254,6 +262,16 @@ class GGUFWriter:
             offset_tensor = 0
 
             for name, ti in tensors.items():
+<<<<<<< HEAD
+<<<<<<< HEAD
+                if name.endswith("_scale"):
+                    continue
+=======
+>>>>>>> master
+=======
+                if name.endswith("_scale"):
+                    continue
+>>>>>>> ahead
                 ti_data += self._pack_val(name, GGUFValueType.STRING, add_vtype=False)
                 n_dims = len(ti.shape)
                 ti_data += self._pack("I", n_dims)
@@ -261,7 +279,21 @@ class GGUFWriter:
                     ti_data += self._pack("Q", ti.shape[n_dims - 1 - j])
                 ti_data += self._pack("I", ti.dtype)
                 ti_data += self._pack("Q", offset_tensor)
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> ahead
+                dtype = ti.dtype
+                if ti.dtype == GGMLQuantizationType.TL1 or dtype == GGMLQuantizationType.TL2:
+                    offset_tensor += GGUFWriter.ggml_pad(ti.nbytes, self.data_alignment) + self.data_alignment
+                else:
+                    offset_tensor += GGUFWriter.ggml_pad(ti.nbytes, self.data_alignment)
+<<<<<<< HEAD
+=======
                 offset_tensor += GGUFWriter.ggml_pad(ti.nbytes, self.data_alignment)
+>>>>>>> master
+=======
+>>>>>>> ahead
 
             fout.write(ti_data)
             fout.flush()
@@ -349,8 +381,8 @@ class GGUFWriter:
                 raise ValueError("Only F16, F32, F64, I8, I16, I32, I64 tensors are supported for now")
         else:
             dtype = raw_dtype
-            if tensor_dtype == np.uint8:
-                tensor_shape = quant_shape_from_byte_shape(tensor_shape, raw_dtype)
+            # if tensor_dtype == np.uint8:
+            #     tensor_shape = quant_shape_from_byte_shape(tensor_shape, raw_dtype)
 
         # make sure there is at least one tensor before splitting
         if len(self.tensors[-1]) > 0:
@@ -377,7 +409,12 @@ class GGUFWriter:
             self.temp_file = fp
 
         shape: Sequence[int] = raw_shape if raw_shape is not None else tensor.shape
-        self.add_tensor_info(name, shape, tensor.dtype, tensor.nbytes, raw_dtype=raw_dtype)
+
+        # if (raw_dtype != GGMLQuantizationType.F32 or not name.endswith("scale")):
+        self.add_tensor_info(name, shape, tensor.dtype, tensor.nbytes, raw_dtype = raw_dtype)
+        # else:
+        #     self.tensors.append({})
+        #     self.tensors[-1][name] = TensorInfo(shape=(), dtype=tensor.dtype, nbytes=0)
 
         if self.temp_file is None:
             self.tensors[-1][name].tensor = tensor
@@ -670,6 +707,45 @@ class GGUFWriter:
     def add_expert_weights_scale(self, value: float) -> None:
         self.add_float32(Keys.LLM.EXPERT_WEIGHTS_SCALE.format(arch=self.arch), value)
 
+<<<<<<< HEAD
+<<<<<<< HEAD
+    def add_swin_norm(self, value: bool) -> None:
+        self.add_bool(Keys.LLM.SWIN_NORM.format(arch=self.arch), value)
+
+=======
+>>>>>>> 8f1d81a0 (llama : support RWKV v6 models (#8980))
+=======
+    def add_swin_norm(self, value: bool) -> None:
+        self.add_bool(Keys.LLM.SWIN_NORM.format(arch=self.arch), value)
+
+>>>>>>> ahead
+    def add_rescale_every_n_layers(self, count: int) -> None:
+        self.add_uint32(Keys.LLM.RESCALE_EVERY_N_LAYERS.format(arch=self.arch), count)
+
+    def add_time_mix_extra_dim(self, dim: int) -> None:
+        self.add_uint32(Keys.LLM.TIME_MIX_EXTRA_DIM.format(arch=self.arch), dim)
+
+    def add_time_decay_extra_dim(self, dim: int) -> None:
+        self.add_uint32(Keys.LLM.TIME_DECAY_EXTRA_DIM.format(arch=self.arch), dim)
+
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> ahead
+    def add_residual_scale(self, value: float) -> None:
+        self.add_float32(Keys.LLM.RESIDUAL_SCALE.format(arch=self.arch), value)
+
+    def add_embedding_scale(self, value: float) -> None:
+        self.add_float32(Keys.LLM.EMBEDDING_SCALE.format(arch=self.arch), value)
+
+<<<<<<< HEAD
+=======
+>>>>>>> 8f1d81a0 (llama : support RWKV v6 models (#8980))
+=======
+>>>>>>> ahead
+    def add_wkv_head_size(self, size: int) -> None:
+        self.add_uint32(Keys.WKV.HEAD_SIZE.format(arch=self.arch), size)
+
     def add_layer_norm_eps(self, value: float) -> None:
         self.add_float32(Keys.Attention.LAYERNORM_EPS.format(arch=self.arch), value)
 
@@ -691,6 +767,18 @@ class GGUFWriter:
     def add_sliding_window(self, value: int) -> None:
         self.add_uint32(Keys.Attention.SLIDING_WINDOW.format(arch=self.arch), value)
 
+<<<<<<< HEAD
+<<<<<<< HEAD
+    def add_attention_scale(self, value: float) -> None:
+        self.add_float32(Keys.Attention.SCALE.format(arch=self.arch), value)
+
+=======
+>>>>>>> master
+=======
+    def add_attention_scale(self, value: float) -> None:
+        self.add_float32(Keys.Attention.SCALE.format(arch=self.arch), value)
+
+>>>>>>> ahead
     def add_pooling_type(self, value: PoolingType) -> None:
         self.add_uint32(Keys.LLM.POOLING_TYPE.format(arch=self.arch), value.value)
 
@@ -818,15 +906,6 @@ class GGUFWriter:
             value = template_default
 
         self.add_string(Keys.Tokenizer.CHAT_TEMPLATE, value)
-
-    def add_prefix_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.Tokenizer.PREFIX_ID, id)
-
-    def add_suffix_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.Tokenizer.SUFFIX_ID, id)
-
-    def add_middle_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.Tokenizer.MIDDLE_ID, id)
 
     def add_eot_token_id(self, id: int) -> None:
         self.add_uint32(Keys.Tokenizer.EOT_ID, id)
