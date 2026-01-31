@@ -14,6 +14,7 @@
 #include <cinttypes>
 #include <climits>
 #include <cmath>
+#include <chrono>
 #include <codecvt>
 #include <cstdarg>
 #include <cstring>
