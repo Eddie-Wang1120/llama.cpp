@@ -420,7 +420,10 @@ static bool ggml_backend_blas_device_supports_op(ggml_backend_dev_t dev, const s
             // TODO: find the optimal value
             const int64_t min_batch = 32;
 
-            return ggml_is_contiguous(src0) &&
+            // I2_S stores an external scale outside the per-row payload, so it
+            // cannot use the generic BLAS dequantize-to-float path safely.
+            return src0->type != GGML_TYPE_I2_S &&
+                   ggml_is_contiguous(src0) &&
                    ggml_is_contiguous(src1) &&
                    src1->type == GGML_TYPE_F32 &&
                    (ne0 >= min_batch && ne1 >= min_batch && ne10 >= min_batch) &&
