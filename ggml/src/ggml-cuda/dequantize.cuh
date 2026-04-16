@@ -101,3 +101,34 @@ static __device__ __forceinline__ void dequantize_q8_0(const void * vx, const in
     v.y *= d;
 #endif // GGML_CUDA_F16
 }
+
+static __device__ __forceinline__ void dequantize_i2_s(const void * vx, const int64_t ib, const int iqs, dfloat2 & v){
+    const block_i2_s * x = (const block_i2_s *) vx;
+
+    const dfloat d = x[ib].d;
+
+    const int byte_idx = iqs / 2;
+    const int pair_idx = iqs % 2;
+
+    const int vui = x[ib].qs[byte_idx];
+
+    // Map 0, 1, 2, 3 -> -1, 0, 1, 0
+    auto map_ternary = [] __device__ (int val) -> float {
+        return (val == 0) ? -1.0f : (val == 1) ? 0.0f : (val == 2) ? 1.0f : 0.0f;
+    };
+
+    if (pair_idx == 0) {
+        v.x = map_ternary((vui >> 6) & 0x03);
+        v.y = map_ternary((vui >> 4) & 0x03);
+    } else {
+        v.x = map_ternary((vui >> 2) & 0x03);
+        v.y = map_ternary((vui >> 0) & 0x03);
+    }
+
+#ifdef GGML_CUDA_F16
+    v = __hmul2(v, {d, d});
+#else
+    v.x *= d;
+    v.y *= d;
+#endif // GGML_CUDA_F16
+}

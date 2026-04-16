@@ -54,6 +54,7 @@
 #define CC_QY2        220
 
 #define MATRIX_ROW_PADDING 512 // last row of quant. matrices is a multiple of this to avoid out-of-bounds memory accesses
+#define QK_I2_S 128
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
@@ -139,6 +140,11 @@ typedef float2 dfloat2;
 #if !(defined(GGML_USE_MUSA) && __MUSA_ARCH__ <= CC_QY1)
 #define FLASH_ATTN_AVAILABLE
 #endif // !(defined(GGML_USE_MUSA) && __MUSA_ARCH__ <= CC_QY1)
+
+struct block_i2_s {
+    uint8_t qs[QK_I2_S / 4];
+    float d;
+};
 
 static constexpr bool fast_fp16_available(const int cc) {
     return cc >= CC_PASCAL && cc != 610;
@@ -490,6 +496,13 @@ struct ggml_cuda_type_traits<GGML_TYPE_IQ3_S> {
     static constexpr int qk = QK_K;
     static constexpr int qr = QR3_S;
     static constexpr int qi = QI3_S;
+};
+
+template<>
+struct ggml_cuda_type_traits<GGML_TYPE_I2_S> {
+    static constexpr int qk = QK_I2_S;
+    static constexpr int qr = 2;
+    static constexpr int qi = 1;
 };
 
 //////////////////////

@@ -429,6 +429,7 @@ static constexpr __device__ dequantize_kernel_t get_dequantize_kernel(ggml_type 
         type == GGML_TYPE_Q5_0 ? dequantize_q5_0 :
         type == GGML_TYPE_Q5_1 ? dequantize_q5_1 :
         type == GGML_TYPE_Q8_0 ? dequantize_q8_0 :
+        type == GGML_TYPE_I2_S ? dequantize_i2_s :
         type == GGML_TYPE_F16 ? convert_f16 :
         nullptr;
 }
@@ -603,6 +604,15 @@ static void dequantize_mul_mat_vec_q6_K_cuda(const void * vx, const float * y, f
     dequantize_mul_mat_vec_q6_k<<<block_nums, block_dims, 0, stream>>>(vx, y, dst, ncols, nrows);
 }
 
+static void dequantize_mul_mat_vec_i2_s_cuda(const void * vx, const dfloat * y, float * dst, const int ncols, const int nrows, cudaStream_t stream) {
+    GGML_ASSERT(ncols % (GGML_CUDA_DMMV_X*2) == 0);
+    const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
+    const dim3 block_nums(block_num_y, 1, 1);
+    const dim3 block_dims(WARP_SIZE, GGML_CUDA_MMV_Y, 1);
+    dequantize_mul_mat_vec<GGML_TYPE_I2_S>
+        <<<block_nums, block_dims, 0, stream>>>(vx, y, dst, ncols, nrows);
+}
+
 static void convert_mul_mat_vec_f16_cuda(const void * vx, const dfloat * y, float * dst, const int ncols, const int nrows, cudaStream_t stream) {
     GGML_ASSERT(ncols % (GGML_CUDA_DMMV_X*2) == 0);
     const int block_num_y = (nrows + GGML_CUDA_MMV_Y - 1) / GGML_CUDA_MMV_Y;
@@ -677,6 +687,9 @@ void ggml_cuda_op_dequantize_mul_mat_vec(
         case GGML_TYPE_F16:
             convert_mul_mat_vec_f16_cuda(src0_dd_i, src1_dfloat, dst_dd_i, ne00, row_diff, stream);
             break;
+        case GGML_TYPE_I2_S:
+            dequantize_mul_mat_vec_i2_s_cuda(src0_dd_i, src1_dfloat, dst_dd_i, ne00, row_diff, stream);
+            break;
         default:
             GGML_ABORT("fatal error");
             break;
@@ -695,5 +708,5 @@ bool ggml_cuda_dmmv_type_supported(ggml_type src0_type) {
         src0_type == GGML_TYPE_Q8_0 || src0_type == GGML_TYPE_Q2_K ||
         src0_type == GGML_TYPE_Q3_K || src0_type == GGML_TYPE_Q4_K ||
         src0_type == GGML_TYPE_Q5_K || src0_type == GGML_TYPE_Q6_K ||
-        src0_type == GGML_TYPE_F16;
+        src0_type == GGML_TYPE_I2_S || src0_type == GGML_TYPE_F16;
 }

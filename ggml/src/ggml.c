@@ -12607,7 +12607,7 @@ static void ggml_compute_forward_mul_mat(
     const int nth = params->nth;
 
     if (ggml_bitnet_can_mul_mat(src0, src1, dst)) {
-        ggml_bitnet_mul_mat(params, src0, src1, dst, ith, nth);
+        ggml_bitnet_mul_mat(src0, src1, dst, params->wdata, ith, nth);
         return;
     }
 
@@ -20425,11 +20425,9 @@ struct ggml_cplan ggml_graph_plan(
                 {
                     const enum ggml_type vec_dot_type = type_traits[node->src[0]->type].vec_dot_type;
 
-#if defined(GGML_BITNET_ARM_TL1) || defined(GGML_BITNET_X86_TL2)
                     if (ggml_bitnet_can_mul_mat(node->src[0], node->src[1], node)) {
                         cur = ggml_bitnet_mul_mat_get_wsize(node->src[0], node->src[1], node);
                     } else
-#endif
                     if (node->src[1]->type != vec_dot_type) {
                         if (vec_dot_type == GGML_TYPE_I8_S) {
                             cur = ggml_row_size(vec_dot_type, ggml_nelements(node->src[1])) + node->src[1]->ne[1] * sizeof(float) + node->src[1]->ne[1] * sizeof(int32_t);
