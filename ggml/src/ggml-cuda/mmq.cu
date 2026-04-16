@@ -1,9 +1,7 @@
 #include "mmq.cuh"
+#include "ggml-bitnet-axon.h"
 
-extern "C" void bitnet_mul_mat_ladder_axon(
-    const char * src0, const char * src1, float * dst,
-    int64_t ne00, int64_t ne01, int64_t ne11, int64_t ne0,
-    cudaStream_t stream);
+extern "C" const struct ggml_bitnet_axon_interface ggml_bitnet_axon_cuda;
 
 void ggml_cuda_op_mul_mat_q(
     ggml_backend_cuda_context & ctx,
@@ -93,7 +91,7 @@ void ggml_cuda_op_mul_mat_q(
             mul_mat_q_case<GGML_TYPE_IQ4_NL>(ctx, args, stream);
             break;
         case GGML_TYPE_I2_S:
-            bitnet_mul_mat_ladder_axon(src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, src1_ncols, nrows_dst, stream);
+            ggml_bitnet_axon_cuda.mul_mat(src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, src1_ncols, nrows_dst, stream);
             break;
         default:
             GGML_ABORT("fatal error");

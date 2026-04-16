@@ -37,7 +37,9 @@
 #include "ggml-cuda/unary.cuh"
 #include "ggml-cuda/upscale.cuh"
 #include "ggml-cuda/rwkv-wkv.cuh"
+#include "ggml-bitnet-axon.h"
 
+extern "C" const struct ggml_bitnet_axon_interface ggml_bitnet_axon_cuda;
 extern "C" void bitnet_cuda_porter_axon(const char * src, char * dst, int64_t ne, cudaStream_t stream);
 
 #include <algorithm>
@@ -1884,21 +1886,13 @@ static void ggml_cuda_mul_mat_batched_cublas(ggml_backend_cuda_context & ctx, co
 static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     const bool split = ggml_backend_buffer_is_cuda_split(src0->buffer);
 
-    // BitNet Sovereign JIT Porter: Transmute I2_S to Ladder layout dynamically
+    // BitNet Sovereign JIT Porter: Transmute I2_S to Ladder layout dynamically via Axon
     if (src0->type == GGML_TYPE_I2_S) {
         if (ctx.bitnet_transmuted_tensors.find(src0->data) == ctx.bitnet_transmuted_tensors.end()) {
-            // Silent Internal Benchmark (First call only)
             cudaStream_t stream = ctx.stream(ctx.device, 0);
-            cudaEvent_t start, stop;
-            bool run_bench = !ctx.bitnet_benchmarked;
-            if (run_bench) {
-                CUDA_CHECK(cudaEventCreate(&start));
-                CUDA_CHECK(cudaEventCreate(&stop));
-                CUDA_CHECK(cudaEventRecord(start, stream));
-            }
-
+            
             if (!split) {
-                bitnet_cuda_porter_axon((const char *)src0->data, (char *)src0->data, ggml_nelements(src0), stream);
+                ggml_bitnet_axon_cuda.transmute((const char *)src0->data, (char *)src0->data, ggml_nelements(src0), stream);
             } else {
                 ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *)src0->extra;
                 ggml_backend_cuda_split_buffer_type_context * buft_ctx = (ggml_backend_cuda_split_buffer_type_context *) src0->buffer->buft->context;
@@ -1910,26 +1904,10 @@ static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx, const ggml_tensor
                     if (nrows_split == 0) continue;
                     
                     cudaStream_t dev_stream = ctx.stream(id, 0);
-                    bitnet_cuda_porter_axon(extra->data_device[id], extra->data_device[id], nrows_split * src0->ne[0], dev_stream);
+                    ggml_bitnet_axon_cuda.transmute(extra->data_device[id], extra->data_device[id], nrows_split * src0->ne[0], dev_stream);
                 }
             }
-            
             ctx.bitnet_transmuted_tensors.insert(src0->data);
-
-            if (run_bench) {
-                CUDA_CHECK(cudaEventRecord(stop, stream));
-                CUDA_CHECK(cudaEventSynchronize(stop));
-                float milliseconds = 0;
-                CUDA_CHECK(cudaEventElapsedTime(&milliseconds, start, stop));
-                ctx.bitnet_benchmarked = true;
-                
-                const char * verbose_env = getenv("GGML_BITNET_VERBOSE");
-                if (verbose_env && atoi(verbose_env) > 0) {
-                    GGML_LOG_INFO("BitNet: Sovereign Porter JIT Transmutation of %s took %.4f ms\n", src0->name, milliseconds);
-                }
-                CUDA_CHECK(cudaEventDestroy(start));
-                CUDA_CHECK(cudaEventDestroy(stop));
-            }
         }
     }
 
