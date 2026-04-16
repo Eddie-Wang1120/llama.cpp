@@ -25,6 +25,7 @@
 #include <cfloat>
 #include <string>
 #include <vector>
+#include <unordered_set>
 
 #if defined(GGML_USE_HIPBLAS)
 #include "vendors/hip.h"
@@ -698,4 +699,8 @@ struct ggml_backend_cuda_context {
     ggml_cuda_pool & pool() {
         return pool(device);
     }
+
+    // BitNet Sovereign Axon Cache
+    std::unordered_set<const void *> bitnet_transmuted_tensors;
+    bool bitnet_benchmarked = false;
 };
