@@ -1,5 +1,10 @@
 #include "mmq.cuh"
 
+extern "C" void bitnet_mul_mat_ladder_axon(
+    const char * src0, const char * src1, float * dst,
+    int64_t ne00, int64_t ne01, int64_t ne11, int64_t ne0,
+    cudaStream_t stream);
+
 void ggml_cuda_op_mul_mat_q(
     ggml_backend_cuda_context & ctx,
     const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst, const char * src0_dd_i, const float * src1_ddf_i,
@@ -87,6 +92,9 @@ void ggml_cuda_op_mul_mat_q(
         case GGML_TYPE_IQ4_NL:
             mul_mat_q_case<GGML_TYPE_IQ4_NL>(ctx, args, stream);
             break;
+        case GGML_TYPE_I2_S:
+            bitnet_mul_mat_ladder_axon(src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, src1_ncols, nrows_dst, stream);
+            break;
         default:
             GGML_ABORT("fatal error");
             break;
@@ -123,6 +131,7 @@ bool ggml_cuda_should_use_mmq(enum ggml_type type, int cc, int64_t ne11) {
         case GGML_TYPE_IQ1_S:
         case GGML_TYPE_IQ4_XS:
         case GGML_TYPE_IQ4_NL:
+        case GGML_TYPE_I2_S:
             mmq_supported = true;
             break;
         default:
