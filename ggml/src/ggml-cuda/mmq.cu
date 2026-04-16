@@ -1,7 +1,9 @@
 #include "mmq.cuh"
 #include "ggml-bitnet-axon.h"
 
+#if !defined(GGML_USE_HIPBLAS)
 extern "C" const struct ggml_bitnet_axon_interface ggml_bitnet_axon_cuda;
+#endif
 
 void ggml_cuda_op_mul_mat_q(
     ggml_backend_cuda_context & ctx,
@@ -91,7 +93,11 @@ void ggml_cuda_op_mul_mat_q(
             mul_mat_q_case<GGML_TYPE_IQ4_NL>(ctx, args, stream);
             break;
         case GGML_TYPE_I2_S:
+#if !defined(GGML_USE_HIPBLAS)
             ggml_bitnet_axon_cuda.mul_mat(src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, src1_ncols, nrows_dst, stream);
+#else
+            GGML_ABORT("I2_S MMQ not supported on HIP — use DMMV path");
+#endif
             break;
         default:
             GGML_ABORT("fatal error");

@@ -8,6 +8,10 @@
 
 // Forward declarations of internal kernels
 extern "C" void bitnet_cuda_porter_axon(const char * src, char * dst, int64_t ne, cudaStream_t stream);
+extern "C" void bitnet_mul_mat_ladder_axon(
+    const char * src0, const char * src1, float * dst,
+    int64_t ne00, int64_t ne01, int64_t ne11, int64_t ne0,
+    cudaStream_t stream);
 
 static struct ggml_bitnet_axon_config axon_config = {0, true, true};
 
@@ -38,11 +42,6 @@ static void bitnet_axon_cuda_mul_mat(
     void * stream) {
     
     // External high-perf kernels bridge
-    extern void bitnet_mul_mat_ladder_axon(
-        const char * src0, const char * src1, float * dst,
-        int64_t ne00, int64_t ne01, int64_t ne11, int64_t ne0,
-        cudaStream_t stream);
-
     bitnet_mul_mat_ladder_axon(src0, src1, dst, ne00, ne01, ne11, ne0, (cudaStream_t)stream);
 }
 
@@ -50,8 +49,7 @@ static void bitnet_axon_cuda_free(void) {
     // Cleanup if necessary
 }
 
-// Global interface instance for the CUDA BitNet Axon
-const struct ggml_bitnet_axon_interface ggml_bitnet_axon_cuda = {
+extern "C" const struct ggml_bitnet_axon_interface ggml_bitnet_axon_cuda = {
     bitnet_axon_cuda_init,
     bitnet_axon_cuda_transmute,
     bitnet_axon_cuda_mul_mat,

@@ -305,7 +305,7 @@ if (GGML_CUDA)
         list(APPEND GGML_HEADERS_CUDA "../include/ggml-cuda.h")
 
         file(GLOB   GGML_SOURCES_CUDA "ggml-cuda/*.cu")
-        list(APPEND GGML_SOURCES_CUDA "ggml-cuda.cu")
+        list(APPEND GGML_SOURCES_CUDA "ggml-cuda.cu" "ggml-bitnet-axon-gpu.cu")
         file(GLOB   SRCS "ggml-cuda/template-instances/fattn-wmma*.cu")
         list(APPEND GGML_SOURCES_CUDA ${SRCS})
         file(GLOB   SRCS "ggml-cuda/template-instances/mmq*.cu")
@@ -453,6 +453,9 @@ if (GGML_HIPBLAS)
 
     file(GLOB   GGML_SOURCES_ROCM "ggml-cuda/*.cu")
     list(APPEND GGML_SOURCES_ROCM "ggml-cuda.cu")
+    # Exclude BitNet CUDA-Axon files (they reference external CUDA Ladder kernels)
+    list(FILTER GGML_SOURCES_ROCM EXCLUDE REGEX "ggml-bitnet-axon-gpu\\.cu$")
+    list(FILTER GGML_SOURCES_ROCM EXCLUDE REGEX "dequantize-i2s\\.cu$")
     file(GLOB   SRCS "ggml-cuda/template-instances/fattn-wmma*.cu")
     list(APPEND GGML_SOURCES_ROCM ${SRCS})
     file(GLOB   SRCS "ggml-cuda/template-instances/mmq*.cu")
@@ -679,7 +682,7 @@ if (GGML_VULKAN)
         )
 
         set(GGML_HEADERS_VULKAN ${CMAKE_CURRENT_SOURCE_DIR}/../include/ggml-vulkan.h ${_ggml_vk_header})
-        set(GGML_SOURCES_VULKAN ggml-vulkan.cpp ${_ggml_vk_source})
+        set(GGML_SOURCES_VULKAN ggml-vulkan.cpp ggml-bitnet-axon-vulkan.cpp ${_ggml_vk_source})
 
         list(APPEND GGML_EXTRA_LIBS_PRIVATE Vulkan::Vulkan)
         list(APPEND GGML_EXTRA_INCLUDES     ${CMAKE_CURRENT_BINARY_DIR})
@@ -1338,9 +1341,12 @@ add_library(ggml
             ../include/ggml-backend.h
             ../../../../include/bitnet-lut-kernels.h
             ../../../../include/ggml-bitnet.h
+            ../include/ggml-bitnet-axon-factory.h
             ggml.c
             ggml-alloc.c
             ggml-backend.cpp
+            ggml-bitnet-axon-factory.cpp
+            ggml-bitnet-axon-cpu.cpp
             ggml-quants.c
             ggml-quants.h
             ../../../../src/ggml-bitnet-mad.cpp

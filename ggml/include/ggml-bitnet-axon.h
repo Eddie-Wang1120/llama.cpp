@@ -34,6 +34,15 @@ struct ggml_bitnet_axon_interface {
     void (*free)(void);
 };
 
+// Sovereign Axon Instances (exposed for linking)
+extern const struct ggml_bitnet_axon_interface ggml_bitnet_axon_cpu;
+#if defined(GGML_USE_CUDA) && !defined(GGML_USE_HIPBLAS)
+extern const struct ggml_bitnet_axon_interface ggml_bitnet_axon_cuda;
+#endif
+#ifdef GGML_USE_VULKAN
+extern const struct ggml_bitnet_axon_interface ggml_bitnet_axon_vulkan;
+#endif
+
 #ifdef  __cplusplus
 }
 #endif

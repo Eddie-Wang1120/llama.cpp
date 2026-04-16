@@ -31,7 +31,7 @@ static void bitnet_axon_vulkan_free(void) {
     // Cleanup
 }
 
-const struct ggml_bitnet_axon_interface ggml_bitnet_axon_vulkan = {
+extern "C" const struct ggml_bitnet_axon_interface ggml_bitnet_axon_vulkan = {
     bitnet_axon_vulkan_init,
     bitnet_axon_vulkan_transmute,
     bitnet_axon_vulkan_mul_mat,

@@ -1,5 +1,8 @@
 #include "convert.cuh"
 #include "dequantize.cuh"
+#if !defined(GGML_USE_HIPBLAS)
+#include "dequantize-i2s.cuh"
+#endif
 
 #define CUDA_Q8_0_NE_ALIGN 2048
 
@@ -631,6 +634,8 @@ to_fp16_cuda_t ggml_get_to_fp16_cuda(ggml_type type) {
             return dequantize_row_iq4_xs_cuda;
         case GGML_TYPE_IQ3_S:
             return dequantize_row_iq3_s_cuda;
+        case GGML_TYPE_I2_S:
+            return dequantize_block_cuda<QK_I2_S, 2, dequantize_i2_s>;
         case GGML_TYPE_F32:
             return convert_unary_cuda<float>;
         default:
@@ -678,6 +683,8 @@ to_fp32_cuda_t ggml_get_to_fp32_cuda(ggml_type type) {
             return dequantize_row_iq4_xs_cuda;
         case GGML_TYPE_IQ3_S:
             return dequantize_row_iq3_s_cuda;
+        case GGML_TYPE_I2_S:
+            return dequantize_block_cuda<QK_I2_S, 2, dequantize_i2_s>;
         case GGML_TYPE_F16:
             return convert_unary_cuda<half>;
         default:

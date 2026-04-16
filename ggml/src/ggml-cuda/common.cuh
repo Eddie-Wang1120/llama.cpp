@@ -142,10 +142,7 @@ typedef float2 dfloat2;
 #define FLASH_ATTN_AVAILABLE
 #endif // !(defined(GGML_USE_MUSA) && __MUSA_ARCH__ <= CC_QY1)
 
-struct block_i2_s {
-    uint8_t qs[QK_I2_S / 4];
-    float d;
-};
+// block_i2_s is now defined in ggml-common.h for universality
 
 static constexpr bool fast_fp16_available(const int cc) {
     return cc >= CC_PASCAL && cc != 610;
@@ -699,8 +696,4 @@ struct ggml_backend_cuda_context {
     ggml_cuda_pool & pool() {
         return pool(device);
     }
-
-    // BitNet Sovereign Axon Cache
-    std::unordered_set<const void *> bitnet_transmuted_tensors;
-    bool bitnet_benchmarked = false;
 };

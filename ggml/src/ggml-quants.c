@@ -3501,24 +3501,33 @@ void dequantize_row_tq2_0(const block_tq2_0 * restrict x, float * restrict y, in
 #define ACT_K_PACK_SIZE 128
 
 void quantize_row_i8_s(const float * x, void * y, int64_t n, float* act_scales, int32_t* act_sums) {
-// void quantize_row_i8_s(const float * x, void * y, int64_t n, float* act_scales) {
-    int8_t* dst = (int8_t*)y;
-    double min = 0.00001;
-    double max = min;
-    for (int i = 0; i < n; ++i) {
-        max = MAX(max, (double)fabs((double)x[i]));
+    uint8_t* dst = (uint8_t*)y;
+    const int QK8_S = 128;
+    const int nb = n / QK8_S;
+
+    for (int i = 0; i < nb; i++) {
+        const float * block_src = x + i * QK8_S;
+        uint8_t * block_dst = dst + i * 132;
+
+        float max_val = 1e-5f;
+        for (int k = 0; k < QK8_S; k++) {
+            float val = fabsf(block_src[k]);
+            if (val > max_val) max_val = val;
+        }
+
+        const float s = 127.0f / max_val;
+        const float d = max_val / 127.0f; // dequantization scale
+
+        for (int k = 0; k < QK8_S; k++) {
+            int v = (int)roundf(block_src[k] * s);
+            if (v >  127) v = 127;
+            if (v < -128) v = -128;
+            block_dst[k] = (int8_t)v;
+        }
+        *(float *)(block_dst + 128) = d;
     }
-    float s = 127 / max;
-    act_scales[0] = s;
-    int32_t sum = 0;
-    for (int i = 0; i < n; ++i) {
-        int v = nearest_int(x[i] * s);
-        if (v >  127) v = 127;
-        if (v < -128) v = -128;
-        sum += v;
-        dst[i] = (int8_t)(v);
-    }
-    act_sums[0] = sum;
+    // Maintain legacy pointers if needed, but the primary scale is now inline.
+    if (act_scales) act_scales[0] = 1.0f; // Dummy
 }
 
 void quantize_row_i8_s_4x1(const float * x, void * y, int64_t n, float* act_scales, int32_t* act_sums) {
@@ -3894,16 +3903,14 @@ void quantize_row_i8_s_4x1(const float * x, void * y, int64_t n, float* act_scal
 // #endif
 // }
 
-void dequantize_row_i2_s(const uint8_t * x, float * y, int64_t n, const float i2_scale) {
+void dequantize_row_i2_s(const uint8_t * x, float * y, int64_t n, const float i2_scale_ignored) {
+    (void)i2_scale_ignored;
     static const float map2bit[4] = { -1.0f, 0.0f, +1.0f, 0.0f };
 
     int64_t done = 0;
     while (done < n) {
-        const int64_t blk_e = (n - done >= 128) ? 128 : (n - done);
-        const int64_t cols0 = blk_e >= 32 ? 32 : blk_e;              
-        const int64_t cols1 = blk_e >= 64 ? 32 : MAX(0, blk_e - 32); 
-        const int64_t cols2 = blk_e >= 96 ? 32 : MAX(0, blk_e - 64); 
-        const int64_t cols3 = blk_e >= 128 ? 32 : MAX(0, blk_e - 96);
+        // Read scale for this block of 128
+        const float block_scale = *(const float *)(x + 32);
 
         for (int gp = 0; gp < 32; ++gp) {
             const uint8_t b = x[gp];
@@ -3913,14 +3920,14 @@ void dequantize_row_i2_s(const uint8_t * x, float * y, int64_t n, const float i2
             const uint8_t c2 = (b >> 2) & 0x3;
             const uint8_t c3 = (b >> 0) & 0x3;
 
-            if (gp < cols0) y[done + 0*32 + gp] = i2_scale * map2bit[c0];
-            if (gp < cols1) y[done + 1*32 + gp] = i2_scale * map2bit[c1];
-            if (gp < cols2) y[done + 2*32 + gp] = i2_scale * map2bit[c2];
-            if (gp < cols3) y[done + 3*32 + gp] = i2_scale * map2bit[c3];
+            y[done + 0*32 + gp] = block_scale * map2bit[c0];
+            y[done + 1*32 + gp] = block_scale * map2bit[c1];
+            y[done + 2*32 + gp] = block_scale * map2bit[c2];
+            y[done + 3*32 + gp] = block_scale * map2bit[c3];
         }
 
-        x    += 32;
-        done += blk_e;
+        x    += 36;
+        done += 128;
     }
 }
 
