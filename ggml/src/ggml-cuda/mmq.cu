@@ -1,4 +1,9 @@
 #include "mmq.cuh"
+#include "ggml-bitnet-axon.h"
+
+#if !defined(GGML_USE_HIPBLAS)
+extern "C" const struct ggml_bitnet_axon_interface ggml_bitnet_axon_cuda;
+#endif
 
 void ggml_cuda_op_mul_mat_q(
     ggml_backend_cuda_context & ctx,
@@ -26,7 +31,11 @@ void ggml_cuda_op_mul_mat_q(
     // nrows_dst == nrows of the matrix that the kernel writes into
     const int64_t nrows_dst = id == ctx.device ? ne0 : row_diff;
 
-    const mmq_args args = {src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, stride00, src1_padded_row_size, src1_ncols, ne11, nrows_dst};
+    // The stream-k decomposition is only faster for recent NVIDIA GPUs.
+    // Also its fixup needs to allocate a temporary buffer in the memory pool.
+    // There are multiple parallel CUDA streams for src1_ncols != ne11 which would introduce a race condition for this buffer.
+    const bool use_stream_k = compute_capability >= CC_VOLTA && compute_capability < CC_OFFSET_AMD && src1_ncols == ne11;
+    const mmq_args args = {src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, stride00, src1_padded_row_size, src1_ncols, ne11, nrows_dst, use_stream_k};
 
     switch (src0->type) {
         case GGML_TYPE_Q4_0:
@@ -83,6 +92,13 @@ void ggml_cuda_op_mul_mat_q(
         case GGML_TYPE_IQ4_NL:
             mul_mat_q_case<GGML_TYPE_IQ4_NL>(ctx, args, stream);
             break;
+        case GGML_TYPE_I2_S:
+#if !defined(GGML_USE_HIPBLAS)
+            ggml_bitnet_axon_cuda.mul_mat(src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, src1_ncols, nrows_dst, stream);
+#else
+            GGML_ABORT("I2_S MMQ not supported on HIP — use DMMV path");
+#endif
+            break;
         default:
             GGML_ABORT("fatal error");
             break;
@@ -119,6 +135,7 @@ bool ggml_cuda_should_use_mmq(enum ggml_type type, int cc, int64_t ne11) {
         case GGML_TYPE_IQ1_S:
         case GGML_TYPE_IQ4_XS:
         case GGML_TYPE_IQ4_NL:
+        case GGML_TYPE_I2_S:
             mmq_supported = true;
             break;
         default:
