@@ -7,6 +7,7 @@
 #include "ggml-quants.h"
 #include "ggml.h"
 #include "ggml-aarch64.h"
+#include "ggml-bitnet.h"
 
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <malloc.h> // using malloc.h with MSC/MINGW
@@ -46,9 +47,14 @@
 #ifdef GGML_USE_LLAMAFILE
 #include <llamafile/sgemm.h>
 #endif
-#if defined(GGML_BITNET_ARM_TL1) || defined(GGML_BITNET_X86_TL2)
-#include "ggml-bitnet.h"
-#endif
+// #if defined(GGML_BITNET_ARM_TL1) || defined(GGML_BITNET_X86_TL2)
+// #include "ggml-bitnet.h"
+// #endif
+
+// BitNet prototypes
+size_t quantize_i2_s(const float * src, void * dst, int64_t nrow, int64_t n_per_row, const float * imatrix);
+void dequantize_row_i2_s_block(const void * vx, float * y, int64_t n);
+void ggml_vec_dot_i2_i8_s(int n, float * s, size_t bs, const void * vx, size_t bx, const void * vy, size_t by, int nrc);
 
 #if defined(_MSC_VER)
 // disable "possible loss of data" to avoid hundreds of casts
@@ -1171,22 +1177,21 @@ static const struct ggml_type_traits type_traits[GGML_TYPE_COUNT] = {
     },
     [GGML_TYPE_I2_S] = {
         .type_name                = "i2_s",
-        .blck_size                = 1,
-        .type_size                = sizeof(int8_t),
+        .blck_size                = 128,
+        .type_size                = 32 + sizeof(float),
         .is_quantized             = true,
-        .to_float                 = (ggml_to_float_t) dequantize_row_i2_s,
+        .to_float                 = (ggml_to_float_t) dequantize_row_i2_s_block,
         .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_i2_i8_s,
-        .gemv                     = (ggml_gemv_t) ggml_gemv_i2_i8_s,
-        .gemm                     = (ggml_gemm_t) ggml_gemm_i2_i8_s,
+        .gemv                     = NULL,
+        .gemm                     = NULL,
         .nrows                    = 1,
-        .ncols                    = 4,
+        .ncols                    = 128,
         .vec_dot_type             = GGML_TYPE_I8_S,
-        .nrows                    = 1,
     },
     [GGML_TYPE_I8_S] = {
         .type_name                = "i8_s",
-        .blck_size                = 1,
-        .type_size                = sizeof(int8_t),
+        .blck_size                = 128,
+        .type_size                = 128 + sizeof(float),
         .is_quantized             = true,
     }
 };
@@ -12473,7 +12478,8 @@ static void ggml_compute_forward_mul_mat_one_chunk(
                 const int64_t i2 = i12;
                 const int64_t i3 = i13;
 
-                const char * src0_row = (const char*)src0->data + (0 + i02 * nb02 + i03 * nb03);
+                const char * src0_base = (const char *) ggml_bitnet_get_data(src0);
+                const char * src0_row = src0_base + (0 + i02 * nb02 + i03 * nb03);
 
                 // desc: when src1 is not a contiguous memory block we have to calculate the offset using the strides
                 //       if it is, then we have either copied the data to params->wdata and made it contiguous or we are using
@@ -12501,28 +12507,8 @@ static void ggml_compute_forward_mul_mat_one_chunk(
                 //     }
                 // }
 
-                if (src0->type == GGML_TYPE_I2_S && iir0 + blck_0 - 1 < ir0_end) {
-                    // 16 rows per vector dot product, so we can process 16 rows at a time blck == 16
-                    // this is a bit of a hack, we should probably have a better way to handle this
-                    vec_dot(ne00, &tmp[0], 1, 
-                        src0_row + iir0 * nb01 / 4, nb01, 
-                        src1_col_de, 0, 16);
-                    
-                    // post compute activation scaling
-                    for (int row = 0; row < 16; row++) {
-                        tmp[row] = (tmp[row] - act_sums[i1]) / (act_scales[i1]) * (*scale);
-                    }
-                }
-                else
-                {
-                    for (int64_t ir0 = iir0; ir0 < iir0 + blck_0 && ir0 < ir0_end; ir0 += num_rows_per_vec_dot) {
-                        if (src0->type == GGML_TYPE_I2_S) {
-                            vec_dot(ne00, &tmp[ir0 - iir0], 0, src0_row + ir0 * nb01 / 4, 0, src1_col_de, 0, 1);
-                            tmp[ir0 - iir0] = (tmp[ir0 - iir0]  - act_sums[i1]) / (act_scales[i1]) * (*scale);
-                        } else {
-                            vec_dot(ne00, &tmp[ir0 - iir0], (num_rows_per_vec_dot > 1 ? 16 : 0), src0_row + ir0 * nb01, (num_rows_per_vec_dot > 1 ? nb01 : 0), src1_col, (num_rows_per_vec_dot > 1 ? src1_col_stride : 0), num_rows_per_vec_dot);
-                        }
-                    }
+                for (int64_t ir0 = iir0; ir0 < iir0 + blck_0 && ir0 < ir0_end; ir0 += num_rows_per_vec_dot) {
+                    vec_dot(ne00, &tmp[ir0 - iir0], (num_rows_per_vec_dot > 1 ? 16 : 0), src0_row + ir0 * nb01, (num_rows_per_vec_dot > 1 ? nb01 : 0), src1_col, (num_rows_per_vec_dot > 1 ? src1_col_stride : 0), num_rows_per_vec_dot);
                 }
 
                 for (int cn = 0; cn < num_rows_per_vec_dot; ++cn) {
@@ -12620,6 +12606,11 @@ static void ggml_compute_forward_mul_mat(
     const int ith = params->ith;
     const int nth = params->nth;
 
+    if (ggml_bitnet_can_mul_mat(src0, src1, dst)) {
+        ggml_bitnet_mul_mat(params, src0, src1, dst, ith, nth);
+        return;
+    }
+
     const enum ggml_type type = src0->type;
 
     enum ggml_type           const vec_dot_type         = type_traits[type].vec_dot_type;
@@ -12676,6 +12667,9 @@ static void ggml_compute_forward_mul_mat(
 // #endif
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
+    ggml_bitnet_get_data(src0); // ensure it's accessed or remove if purely delegated
+    const void * src0_data = ggml_bitnet_get_data(src0);
+    (void)src0_data;
 #if defined(GGML_BITNET_ARM_TL1)
     if (ggml_bitnet_can_mul_mat(src0, src1, dst)) {
 
@@ -13110,6 +13104,7 @@ static void ggml_compute_forward_mul_mat(
     }
 #endif
 
+
 #if GGML_USE_LLAMAFILE
     // broadcast factors
     const int64_t r2 = ne12 / ne02;
@@ -13205,7 +13200,6 @@ UseGgmlGemm1:;
 UseGgmlGemm2:;
 #endif
 
-    // This is the size of the first dimension of the result, so we can iterate that way. (see the ASSERT above, these are the same numbers)
     const int64_t nr0 = ne0;
 
     // This is the size of the rest of the dimensions of the result
@@ -13246,7 +13240,7 @@ UseGgmlGemm2:;
     const int64_t dr0 = (nr0 + nchunk0 - 1) / nchunk0;
     const int64_t dr1 = (nr1 + nchunk1 - 1) / nchunk1;
 
-    if ((ggml_n_dims(src0) == 2) && gemv) {
+    if ((ggml_n_dims(src0) == 2) && gemv && (src0->type != GGML_TYPE_I2_S)) {
         const void * src1_wdata      = (src1->type == vec_dot_type) ? src1->data : params->wdata;
         const size_t src1_col_stride = ggml_is_contiguous(src1) || src1->type != vec_dot_type ? ggml_row_size(vec_dot_type, ne10) : nb11;
         int64_t src0_start = (ith * ne01) / nth;
@@ -13257,45 +13251,13 @@ UseGgmlGemm2:;
 
         // If there are more than three rows in src1, use gemm; otherwise, use gemv.
         if (gemm && (ne11 > 3)) {
-            if (src0->type == GGML_TYPE_I2_S) {
-                float tmp[(src0_end - src0_start)*(ne11 - ne11 % 4)];
-                const float * scale      = (float * )((uint8_t*) (src0->data) + (ne00 * ne01 / 4));
-                const float * act_scales = (const float*) ((const char *) src1_wdata + (ne11 * ne10));
-                const int32_t * act_sums   = (const int32_t*) ((const char *) act_scales + (ne11) * sizeof(float));
-                gemm(ne00, &tmp[0], src0_end - src0_start, (const char *) src0->data + src0_start * nb01 / 4,
-                    (const char *) src1_wdata, ne11 - ne11 % 4, src0_end - src0_start);
-                for (int col = 0; col < ne11 - ne11 % 4; col++) {
-                    for (int row = 0; row < src0_end - src0_start; row++) {
-                        tmp[col * (src0_end - src0_start) + row] = (tmp[col * (src0_end - src0_start) + row] - act_sums[col]) / (act_scales[col]) * (*scale);
-                    }
-                    memcpy((float *)((char *) dst->data + (col * nb1)) + src0_start, tmp + col * (src0_end - src0_start), (src0_end - src0_start) * sizeof(float));
-                }
-            }
-            else {
-                gemm(ne00, (float *)((char *) dst->data) + src0_start, ne01, (const char *) src0->data + src0_start * nb01,
-                    (const char *) src1_wdata, ne11 - ne11 % 4, src0_end - src0_start);
-            }
+            gemm(ne00, (float *)((char *) dst->data) + src0_start, ne01, (const char *) src0->data + src0_start * nb01,
+                (const char *) src1_wdata, ne11 - ne11 % 4, src0_end - src0_start);
         }
         for (int iter = gemm ? ne11 - ne11 % 4 : 0; iter < ne11; iter++) {
-            if (src0->type == GGML_TYPE_I2_S) {
-                float tmp[src0_end - src0_start];
-                const float * scale      = (float * )((uint8_t*) (src0->data) + (ne00 * ne01 / 4));
-                const float * act_scales = (const float*) ((const char *) src1_wdata + (ne11 * ne10));
-                const int32_t * act_sums   = (const int32_t*) ((const char *) act_scales + (ne11) * sizeof(float));
-                gemv(ne00, &tmp[0], ne01,
-                    (const char *) src0->data + src0_start * nb01 / 4,
-                    (const char *) src1_wdata + (src1_col_stride * iter),
-                    1, src0_end - src0_start);
-                for (int row = 0; row < src0_end - src0_start; row++) {
-                    tmp[row] = (tmp[row] - act_sums[iter]) / (act_scales[iter]) * (*scale);
-                }
-                memcpy((float *)((char *) dst->data + (iter * nb1)) + src0_start, tmp, (src0_end - src0_start) * sizeof(float));
-            }
-            else {
-                gemv(ne00, (float *)((char *) dst->data + (iter * nb1)) + src0_start, ne01,
-                (const char *) src0->data + src0_start * nb01, (const char *) src1_wdata + (src1_col_stride * iter), 1,
-                src0_end - src0_start);
-            }
+            gemv(ne00, (float *)((char *) dst->data + (iter * nb1)) + src0_start, ne01,
+            (const char *) src0->data + src0_start * nb01, (const char *) src1_wdata + (src1_col_stride * iter), 1,
+            src0_end - src0_start);
         }
         return;
     }
@@ -14070,7 +14032,7 @@ static void ggml_compute_forward_get_rows_q(
 }
 
 static void ggml_compute_forward_get_rows_i2_s(
-            struct ggml_compute_params * params,
+            const struct ggml_compute_params * params,
             struct ggml_tensor * dst) {
 
     struct ggml_tensor * src0 = dst->src[0];
@@ -14098,9 +14060,12 @@ static void ggml_compute_forward_get_rows_i2_s(
     const int ir0 = dr*ith;
     const int ir1 = MIN(ir0 + dr, nr);
 
-    const uint8_t * base = (const uint8_t *) src0->data;
+    const uint8_t * base = (const uint8_t *) ggml_bitnet_get_data(src0);
     const size_t packed_bytes_total = (size_t) (ggml_nelements(src0) / 4);
     const float  scl = *(const float *)(base + packed_bytes_total);
+    if (params->ith == 0) {
+        printf("DEBUG: I2_S scale = %f, packed_bytes = %zu\n", scl, packed_bytes_total);
+    }
 
     for (int64_t i = ir0; i < ir1; ++i) {
         const int64_t i12 = i/(ne11*ne10);
@@ -14111,7 +14076,7 @@ static void ggml_compute_forward_get_rows_i2_s(
         GGML_ASSERT(i01 >= 0 && i01 < ne01);
 
         dequantize_row_i2_s(
-                (const void *) ((char *) src0->data + i01*nb01/4 + i11*nb02/4 + i12*nb03/4),
+                (const void *) ((char *) src0->data + i01*nb01 + i11*nb02 + i12*nb03),
                      (float *) ((char *)  dst->data + i10*nb1  + i11*nb2  + i12*nb3), nc, scl);
     }
 }
@@ -22689,11 +22654,7 @@ size_t ggml_quantize_chunk(
             assert(false);
     }
 
-    if (type == GGML_TYPE_I2_S) {
-        result = nrows * row_size / 4 + 32;
-    } else {
-        GGML_ASSERT(result == nrows * row_size);
-    }
+    GGML_ASSERT(result == nrows * row_size);
 
     return result;
 }
