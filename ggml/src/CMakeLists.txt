@@ -1331,12 +1331,15 @@ endif()
 #
 
 # ggml
+if (GGML_BITNET_ARM_TL1 OR GGML_BITNET_X86_TL2)
+    set(BITNET_LUT_HEADER ../../../../include/bitnet-lut-kernels.h)
+endif()
 
 add_library(ggml
             ../include/ggml.h
             ../include/ggml-alloc.h
             ../include/ggml-backend.h
-            ../../../../include/bitnet-lut-kernels.h
+            ${BITNET_LUT_HEADER}
             ../../../../include/ggml-bitnet.h
             ggml.c
             ggml-alloc.c
