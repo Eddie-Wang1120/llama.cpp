@@ -3136,11 +3136,13 @@ the following:
 
 ****/
 
-#define CXXFORTH_DISABLE_FILE_ACCESS
+// #define CXXFORTH_DISABLE_FILE_ACCESS
 #ifndef CXXFORTH_DISABLE_FILE_ACCESS
 
     ": included",
-    "    r/o open-file abort\" included: unable to open file\"",
+//    "    r/o open-file abort\" included: unable to open file\"", // show stack for debug ??
+    "    .s 2dup .s type r/o open-file abort\" included: unable to open file\"", // string must 2dup !!
+//    "    .s dup type r/o open-file abort\" included: unable to open file\"",
     "    dup include-file",
     "    close-file abort\" included: unable to close file\" ;",
 
@@ -3245,7 +3247,29 @@ it.
     "    repeat",
     "    drop ;",
 
+    ": process-args-x", // -x remove [ included ]
+//     "    #args 1 = if welcome exit then",
+//     "    #args dup emit cr 1 = if welcome exit then",
+//    "    s\" LLASMA \" pad place", // concatenate argv ??
+    "    #args .s cr 1 = if welcome exit then", // .s show stack emit does not work ??
+    "    1 begin",
+    "        dup #args <",
+    "    while",
+    "        dup arg .s type cr", // dup is for #args so must not add items in loop, else dup wrong
+//    "        dup arg 2dup type cr", // remove cr ??
+//    "        dup arg 2dup type cr",
+//    "        dup arg cr",
+    "        1+",
+    "    repeat",
+    "    .s cr source type cr ;", // cxxforth has no pad !!
+//    "    .s pad count type ;", // drop is for included? remove drop. show stack
+//    "    drop .s ;", // show stack
+//     "    drop ;",
+
+
     ": main   process-args quit ;",
+    
+    ": main-x   process-args-x quit ;",
 };
 
 
@@ -3296,6 +3320,9 @@ extern "C" void cxxforth_reset() {
 // extern "C" int cxxforth_main(int argc, const char** argv) {
 extern "C" int cxxforth_main(int argc, char** argv) {
     try {
+    
+        // OXW-202604 fake command line as "cxxforth ..." must have argv[0]=cxxforth ??
+    
         commandLineArgCount = static_cast<size_t>(argc);
         commandLineArgVector = argv;
 
@@ -3313,6 +3340,105 @@ extern "C" int cxxforth_main(int argc, char** argv) {
         return -1;
     }
 }
+
+// called from LLASMA ForthVM, bypass main process-args
+extern "C" int forthvm_main(int argc, char** argv, char* line) {
+    try {
+    
+        // OXW-202605 forthvm_main evaluate()
+
+        cout << "  in cxxforth forthvm_main evaluate()  line: " << line << endl;
+
+        // refill() 
+        /*
+        if (line) {
+            sourceBuffer = line;
+            sourceOffset = 0;
+            if (*line)
+                add_history(line);
+            std::free(line);
+            push(True);
+        }
+        else {
+            push(False);
+        }
+        */ 
+        
+        commandLineArgCount = static_cast<size_t>(argc);
+        commandLineArgVector = argv;
+
+        cxxforth_reset();
+
+        cout << "  argc " << argc << " / ";        
+        int i;
+        for(i=0;i<argc;i++)
+        {
+            // printf("%s",argv[i]);
+            cout << argv[i] << " / ";
+        }
+
+        if (strcmp(argv[0],"FORTH")==0) {
+
+        // OXW-202605 cout to string
+        std::ostringstream local;
+        auto cout_buff = std::cout.rdbuf(); // save pointer to std::cout buffer
+
+        std::cout.rdbuf(local.rdbuf()); // substitute internal std::cout buffer with
+            // buffer of 'local' object
+
+        // now std::cout work with 'local' buffer
+        // you don't see this message
+        // std::cout << "some message";
+
+        /*
+        // go back to old buffer
+        std::cout.rdbuf(cout_buff);
+
+        // you will see this message
+        std::cout << "back to default buffer\n";
+
+        // print 'local' content
+        std::cout << "local content: " << local.str() << "\n";
+        */
+        
+        cout << endl << endl << "  evaluate() ";        
+        string sline=line; sline="s\" "+sline+"\" cr .s 2dup type";
+        // while (std::getline(*f, line)) {
+            push(CELL(sline.data()));
+            push(static_cast<Cell>(sline.length()));
+            evaluate();
+        // }
+        cout << endl;
+
+        // go back to old buffer
+        std::cout.rdbuf(cout_buff);
+
+        // you will see this message
+        std::cout << "back to default buffer\n";
+
+        // print 'local' content
+        std::cout << endl << "local content: start " << local.str() << "local content: end\n\n";
+
+        }
+        else {
+        // OXW-202605 original cxxforth style main
+        auto mainXt = findDefinition("MAIN-X");
+        if (!mainXt)
+            throw runtime_error("MAIN-X not defined");
+            
+        cout << "  FOUND main-x  executing line: " << line << endl;            
+            
+        mainXt->execute();
+        }
+
+        return 0;
+    }
+    catch (const exception& ex) {
+        cerr << "cxxforth: " << ex.what() << endl;
+        return -1;
+    }
+}
+
 
 /****
 

@@ -12,6 +12,7 @@ extern "C" {
 void cxxforth_reset();
 // int cxxforth_main(int argc, const char** argv);
 int cxxforth_main(int argc, char** argv);
+int forthvm_main(int argc, char** argv, char* line);
 
 #ifdef __cplusplus
 }
