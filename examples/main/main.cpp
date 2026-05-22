@@ -5,6 +5,9 @@
 #include "sampling.h"
 #include "llama.h"
 #include "forth_vm.h"
+#include <stack>
+#include <any>
+
 // #include "common/forth_vm.h"
 
 #include <cassert>
@@ -42,6 +45,8 @@ static std::ostringstream       * g_output_ss;
 static std::vector<llama_token> * g_output_tokens;
 static bool is_interacting  = false;
 static bool need_insert_eot = false;
+
+std::stack<std::any> S;
 
 static void print_usage(int argc, char ** argv) {
     (void) argc;
@@ -143,6 +148,10 @@ int main(int argc, char ** argv) {
     
     // In main() or interactive loop setup:
     ForthVM forth_vm;  // Instantiate once
+    PhosVM phos;
+    std::unordered_map<std::string, std::any> M;
+    
+    S.push(M);
     
     
     if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_MAIN, print_usage)) {
@@ -845,12 +854,14 @@ int main(int argc, char ** argv) {
                     // === NEW: Command Mode Detection ===
                     // Check if input starts with command prefix (e.g., '!')
                     if (!line.empty() && line[0] == '!') {
-
+                    
                         // Strip prefix and execute as Forth command
                         std::string command = line.substr(1);  // remove '!'
 
+                        if (command.substr(0,4)=="PHOS") phos.execute(command,0);
+
                         // if (forth_vm.execute(command, ctx.get())) {
-                        if (forth_vm.execute(command, ctx)) {
+                        else if (forth_vm.execute(command, ctx)) {
                             // Optional: output result to user
                             if (forth_vm.has_value()) {
                                 printf("\x1b[32m[Forth] Result: %.4g\x1b[0m\n", forth_vm.top_value());
@@ -865,8 +876,6 @@ int main(int argc, char ** argv) {
                         continue;
                     }
                     // === END NEW ===
-    
-                    
                     
                     buffer += line;
                 } while (another_line);
