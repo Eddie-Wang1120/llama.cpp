@@ -99,12 +99,27 @@ public:
     bool dup(int ctx); // ze FIRST of all words ...
     bool depth(int ctx); // S.size() 
     bool gettype(int ctx); // type() is a C++ function to get the type of variable!!    // need gettype tostr
+    bool gettype_any(int ctx); // not working, left for debug.
     bool tostr(int ctx); // to string
     bool type(int ctx); // must convert everything to string before output ??
     bool cr(int ctx);     
     bool showstack(int ctx);     
-    bool peek(int ctx);     
-    bool pick(int ctx);             
+    bool peek(int ctx); 
+    bool p_M(int ctx); // debug M
+    bool g_M(int ctx); // key g_M -- get element index key in M
+    bool k_M(int ctx); // k_M -- list all keys in M
+    bool s_M(int ctx); // value key s_M -- set element index key to value in M
+    bool pvs(int ctx); // vector pvs -- print vector<string>
+    bool inV(int ctx); // vector string inV -- is string in vector ?
+    bool g_M_debug(int ctx); 
+    bool g_M_gettype(int ctx);
+    bool peekr(int ctx); // m n peekr // peek range with type check     
+    bool peek_any(int ctx); // not working
+    bool pick(int ctx); 
+    bool find(int ctx);             
+    // bool push(int ctx, std::any obj);             
+    bool push(int ctx);                 
+    bool CAAF(int ctx);      
     bool add(int ctx); // { std::cout << "Adding...\n"; return true; }
     bool sub(int ctx); // { std::cout << "Subtracting...\n"; return true; }
     static std::vector<std::string> tokenize(const std::string& input);
@@ -119,8 +134,23 @@ public:
             {"cr", &PhosVM::cr},                                  
             {".s", &PhosVM::showstack},
             {"peek", &PhosVM::peek},
+            {"peekr", &PhosVM::peekr},
             {"pick", &PhosVM::pick},
+            {"p_M", &PhosVM::p_M},
+            {"g_M", &PhosVM::g_M},
+            {"s_M", &PhosVM::s_M},
+            {"k_M", &PhosVM::k_M},
+            {"pvs", &PhosVM::pvs},            
+            {"inV", &PhosVM::inV},
+            {"vcb", &PhosVM::pick}, // variable curly bracket (define)
+            {"veq", &PhosVM::pick}, // variable eq (define)
+            {"vdc", &PhosVM::pick}, // variable declare (no define)
+            {"find", &PhosVM::find}, // get index of stack item matching string partially
             {"ADD", &PhosVM::add},
+            {"push", &PhosVM::push},
+            {"CAAF", &PhosVM::CAAF},
+            {"add", &PhosVM::add},
+            {"sub", &PhosVM::sub},
             {"SUB", &PhosVM::sub}
         };
         
