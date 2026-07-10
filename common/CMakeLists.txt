@@ -1,6 +1,8 @@
 # common
 
+# find_package(Threads REQUIRED)
 find_package(Threads REQUIRED)
+find_package(CURL REQUIRED)
 
 # Build info header
 #
@@ -51,21 +53,28 @@ endif()
 set(TARGET common)
 
 add_library(${TARGET} STATIC
+    arg.cpp
+    arg.h
     base64.hpp
-    common.h
     common.cpp
-    sampling.h
-    sampling.cpp
-    console.h
+    common.h
     console.cpp
-    grammar-parser.h
-    grammar-parser.cpp
-    json.hpp
+    console.h
     json-schema-to-grammar.cpp
-    train.h
-    train.cpp
-    ngram-cache.h
+    json.hpp
+    log.cpp
+    log.h
     ngram-cache.cpp
+    ngram-cache.h
+    sampling.cpp
+    sampling.h
+    train.cpp
+    train.h
+    cxxforth.h
+    cxxforth.cpp
+    forth_vm.h
+    forth_vm.cpp
+    tz.cpp
     )
 
 if (BUILD_SHARED_LIBS)
@@ -73,6 +82,8 @@ if (BUILD_SHARED_LIBS)
 endif()
 
 set(LLAMA_COMMON_EXTRA_LIBS build_info)
+
+# set(LLAMA_CURL)
 
 # Use curl to download model url
 if (LLAMA_CURL)
@@ -83,6 +94,7 @@ if (LLAMA_CURL)
     set(LLAMA_COMMON_EXTRA_LIBS ${LLAMA_COMMON_EXTRA_LIBS} ${CURL_LIBRARY})
 endif ()
 
-target_include_directories(${TARGET} PUBLIC .)
+target_include_directories(${TARGET} PUBLIC . date)
 target_compile_features   (${TARGET} PUBLIC cxx_std_11)
-target_link_libraries     (${TARGET} PRIVATE ${LLAMA_COMMON_EXTRA_LIBS} PUBLIC llama Threads::Threads)
+# target_link_libraries     (${TARGET} PRIVATE ${LLAMA_COMMON_EXTRA_LIBS} PUBLIC llama Threads::Threads)
+target_link_libraries     (${TARGET} PRIVATE ${LLAMA_COMMON_EXTRA_LIBS} PUBLIC llama Threads::Threads CURL::libcurl)

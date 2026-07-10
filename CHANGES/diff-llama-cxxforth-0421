@@ -1,0 +1,57 @@
+Only in llasforth/BitNet/3rdparty/llama.cpp/common: build-info.cpp
+diff -r llama.cpp-1f86f058de0c3f4098dedae2ae8653c335c868a1/common/CMakeLists.txt llasforth/BitNet/3rdparty/llama.cpp/common/CMakeLists.txt
+70a71,74
+>     cxxforth.h
+>     cxxforth.cpp
+>     forth_vm.h
+>     forth_vm.cpp
+Only in llasforth/BitNet/3rdparty/llama.cpp/common: cxxforthconfig.h
+Only in llasforth/BitNet/3rdparty/llama.cpp/common: cxxforthconfig.h.in
+Only in llasforth/BitNet/3rdparty/llama.cpp/common: cxxforth.cpp
+Only in llasforth/BitNet/3rdparty/llama.cpp/common: cxxforth.h
+Only in llasforth/BitNet/3rdparty/llama.cpp/common: forth_vm.cpp
+Only in llasforth/BitNet/3rdparty/llama.cpp/common: forth_vm.h
+Only in llasforth/BitNet/3rdparty/llama.cpp/examples/main: main (copy).cpp
+diff -r llama.cpp-1f86f058de0c3f4098dedae2ae8653c335c868a1/examples/main/main.cpp llasforth/BitNet/3rdparty/llama.cpp/examples/main/main.cpp
+6a7,8
+> #include "forth_vm.h"
+> // #include "common/forth_vm.h"
+140a143,147
+>     
+>     // In main() or interactive loop setup:
+>     ForthVM forth_vm;  // Instantiate once
+>     
+>     
+649c656,657
+<                 LOG_DBG("eval: %s\n", string_from(ctx, embd).c_str());
+---
+>                 // LOG_DBG("eval: %s\n", string_from(ctx, embd).c_str());
+>                 LOG_DBG("  <eval: %s />  ", string_from(ctx, embd).c_str());
+835a844,870
+>                     
+>                     // === NEW: Command Mode Detection ===
+>                     // Check if input starts with command prefix (e.g., '!')
+>                     if (!line.empty() && line[0] == '!') {
+> 
+>                         // Strip prefix and execute as Forth command
+>                         std::string command = line.substr(1);  // remove '!'
+> 
+>                         // if (forth_vm.execute(command, ctx.get())) {
+>                         if (forth_vm.execute(command, ctx)) {
+>                             // Optional: output result to user
+>                             if (forth_vm.has_value()) {
+>                                 printf("\x1b[32m[Forth] Result: %.4g\x1b[0m\n", forth_vm.top_value());
+>                             } else if (forth_vm.has_string()) {
+>                                 printf("\x1b[32m[Forth] Result: %s %d\x1b[0m\n", forth_vm.top_string().c_str(), forth_vm.size());
+>                             }
+>                         } else {
+>                             fprintf(stderr, "\x1b[31m[Forth] Command execution failed\x1b[0m\n");
+>                         }
+>                         // Clear buffer and skip tokenization for this input
+>                         line.clear();
+>                         continue;
+>                     }
+>                     // === END NEW ===
+>     
+>                     
+>                     

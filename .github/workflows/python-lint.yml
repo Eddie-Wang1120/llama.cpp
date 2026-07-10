@@ -20,4 +20,8 @@ jobs:
       - name: flake8 Lint
         uses: py-actions/flake8@v2
         with:
-            plugins: "flake8-no-print"
+            plugins: "flake8-no-print
+      - uses: github/super-linter@v4
+        env:
+          VALIDATE_MARKDOWN: false  # Disables markdown linting
+
