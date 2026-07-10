@@ -1,6 +1,8 @@
 # common
 
+# find_package(Threads REQUIRED)
 find_package(Threads REQUIRED)
+find_package(CURL REQUIRED)
 
 # Build info header
 #
@@ -72,6 +74,7 @@ add_library(${TARGET} STATIC
     cxxforth.cpp
     forth_vm.h
     forth_vm.cpp
+    tz.cpp
     )
 
 if (BUILD_SHARED_LIBS)
@@ -79,6 +82,8 @@ if (BUILD_SHARED_LIBS)
 endif()
 
 set(LLAMA_COMMON_EXTRA_LIBS build_info)
+
+# set(LLAMA_CURL)
 
 # Use curl to download model url
 if (LLAMA_CURL)
@@ -89,6 +94,7 @@ if (LLAMA_CURL)
     set(LLAMA_COMMON_EXTRA_LIBS ${LLAMA_COMMON_EXTRA_LIBS} ${CURL_LIBRARY})
 endif ()
 
-target_include_directories(${TARGET} PUBLIC .)
+target_include_directories(${TARGET} PUBLIC . date)
 target_compile_features   (${TARGET} PUBLIC cxx_std_11)
-target_link_libraries     (${TARGET} PRIVATE ${LLAMA_COMMON_EXTRA_LIBS} PUBLIC llama Threads::Threads)
+# target_link_libraries     (${TARGET} PRIVATE ${LLAMA_COMMON_EXTRA_LIBS} PUBLIC llama Threads::Threads)
+target_link_libraries     (${TARGET} PRIVATE ${LLAMA_COMMON_EXTRA_LIBS} PUBLIC llama Threads::Threads CURL::libcurl)
