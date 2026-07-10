@@ -39,7 +39,6 @@ static std::ostringstream * g_output_ss;
 static std::vector<llama_token> * g_output_tokens;
 static bool is_interacting = false;
 static bool need_insert_eot = false;
-std::stack<std::any> S;
 static void print_usage(int argc, char ** argv) {
     (void) argc;
     LOG("\nexample usage:\n");
@@ -113,10 +112,11 @@ static std::string chat_add_and_format(struct llama_model * model, std::vector<c
     common_chat_msg new_msg{role, content};
     auto formatted = common_chat_format_single(model, g_params->chat_template, chat_msgs, new_msg, role == "user");
     chat_msgs.push_back({role, content});
-    LOG_DBG("formatted: '%s'\n", formatted.c_str());
+    LOG_DBG("\n\x1b[31mformatted:\x1b[0m '%s'\n", formatted.c_str());
     return formatted;
 }
 using namespace std;
+std::stack<std::any> S;
 std::unordered_map<std::string, std::any> M;
 unordered_map<string,vector<string>> C;
 ForthVM forth_vm;
@@ -132,6 +132,8 @@ void phosinit() {
     M["DBG"] = true;
     S.push(M);
 }
+#define l_dbg if (DBG_M)
+bool DBG_M=false, DBG, X_DBG;
 int main(int argc, char ** argv) {
     common_params params;
     g_params = &params;
@@ -517,13 +519,12 @@ int main(int argc, char ** argv) {
                 if (n_eval > params.n_batch) {
                     n_eval = params.n_batch;
                 }
-                LOG_DBG("  <eval: %s />  ", string_from(ctx, embd).c_str());
                 if (llama_decode(ctx, llama_batch_get_one(&embd[i], n_eval, n_past, 0))) {
                     LOG_ERR("%s : failed to eval\n", __func__);
                     return 1;
                 }
                 n_past += n_eval;
-                LOG_DBG("n_past = %d\n", n_past);
+                l_dbg LOG_DBG("n_past = %d\n", n_past);
                 if (params.n_print > 0 && n_past % params.n_print == 0) {
                     LOG_DBG("\n\033[31mTokens consumed so far = %d / %d \033[0m\n", n_past, n_ctx);
                 }
@@ -545,7 +546,7 @@ int main(int argc, char ** argv) {
             embd.push_back(id);
             input_echo = true;
             --n_remain;
-            LOG_DBG("n_remain: %d\n", n_remain);
+            l_dbg LOG_DBG("n_remain: %d\n", n_remain);
         } else {
             LOG_DBG("embd_inp.size(): %d, n_consumed: %d\n", (int) embd_inp.size(), n_consumed);
             while ((int) embd_inp.size() > n_consumed) {
@@ -606,7 +607,7 @@ int main(int argc, char ** argv) {
                 }
             }
             if (llama_token_is_eog(model, common_sampler_last(smpl))) {
-                LOG_DBG("found an EOG token\n");
+                LOG_DBG("\n\n\x1b[31mfound an EOG token\x1b[0m\n");
                 if (params.interactive) {
                     if (!params.antiprompt.empty()) {
                         const auto first_antiprompt = common_tokenize(ctx, params.antiprompt.front(), false, true);
@@ -658,6 +659,7 @@ int main(int argc, char ** argv) {
                     if (!line.empty() && line[0] == '!') {
                         std::string command = line.substr(1);
                         if (command.substr(0,4)=="PHOS") phos.execute(command,0);
+                        else if (command.substr(0,4)=="PHMM") phos.execute_minimax(command,0);
                         else if (forth_vm.execute(command, ctx)) {
                             if (forth_vm.has_value()) {
                                 printf("\x1b[32m[Forth] Result: %.4g\x1b[0m\n", forth_vm.top_value());
