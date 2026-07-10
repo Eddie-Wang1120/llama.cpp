@@ -16,6 +16,7 @@
 
 // Forward declare llama context wrapper
 struct llama_context;
+// bool DBG = true;
 
 class ForthVM {
 public:
@@ -97,6 +98,8 @@ private:
 class PhosVM {
 public:
     bool dup(int ctx); // ze FIRST of all words ...
+    bool drop(int ctx); // ( x -- )  discard TOS
+    bool swap(int ctx); bool over(int ctx); bool equal(int ctx); 
     bool depth(int ctx); // S.size() 
     bool gettype(int ctx); // type() is a C++ function to get the type of variable!!    // need gettype tostr
     bool gettype_any(int ctx); // not working, left for debug.
@@ -120,26 +123,33 @@ public:
     // bool push(int ctx, std::any obj);             
     bool push(int ctx);                 
     bool CAAF(int ctx);      
+    bool sys(int ctx); bool sys_google(int ctx); bool md5(int ctx); 
+    // URL outfile -- C++ system()
+    bool mstime(int ctx); // time
+    bool h53(int ctx); bool h53s(int ctx); bool curl(int ctx); 
+    // 53 bit hash     // h53 + b64 string // URL outfile curl
     bool add(int ctx); // { std::cout << "Adding...\n"; return true; }
+    bool add_auto(int ctx); bool multiply(int ctx); 
     bool sub(int ctx); // { std::cout << "Subtracting...\n"; return true; }
     static std::vector<std::string> tokenize(const std::string& input);
+    bool words(int ctx);   // WORDS -- list colon dictionary entries
+    bool see(int ctx);     // ( name -- )  print body of one colon definition
+    bool forget(int ctx);  // ( name -- )  erase a colon definition
+    bool json_to_string(int ctx); bool string_to_json(int ctx); bool json_get(int ctx);
+    bool write_file(int ctx); bool read_file(int ctx);
+    bool s_dbg(int ctx); bool l_dbg(int ctx); bool g_dbg(int ctx);  
+    static bool C_DBG; // =false; // DBG, X_DBG;  // in .h or in .cpp ?
+    bool DBG, X_DBG;  // in .h or in .cpp ?
+    static int  D_CTR, L_DBG, W_DBG;
+    bool c_dbg(int ctx); bool s_ctr(int ctx);
 
     using Handler = bool (PhosVM::*)(int);
     std::unordered_map<std::string, Handler> handlers = {
-            {"dup", &PhosVM::dup},
-            {"depth", &PhosVM::depth},
-            {"gettype", &PhosVM::gettype},          
-            {"tostr", &PhosVM::tostr},                      
-            {"type", &PhosVM::type}, 
-            {"cr", &PhosVM::cr},                                  
-            {".s", &PhosVM::showstack},
-            {"peek", &PhosVM::peek},
-            {"peekr", &PhosVM::peekr},
-            {"pick", &PhosVM::pick},
-            {"p_M", &PhosVM::p_M},
-            {"g_M", &PhosVM::g_M},
-            {"s_M", &PhosVM::s_M},
-            {"k_M", &PhosVM::k_M},
+            {"dup", &PhosVM::dup}, {"depth", &PhosVM::depth}, {"gettype", &PhosVM::gettype},
+            {"tostr", &PhosVM::tostr}, {"type", &PhosVM::type}, {"cr", &PhosVM::cr},              
+            {".s", &PhosVM::showstack},{"peek", &PhosVM::peek}, {"peekr", &PhosVM::peekr},
+            {"pick", &PhosVM::pick}, {"p_M", &PhosVM::p_M}, {"g_M", &PhosVM::g_M},
+            {"s_M", &PhosVM::s_M}, {"k_M", &PhosVM::k_M}, {"swap", &PhosVM::swap},
             {"pvs", &PhosVM::pvs},            
             {"inV", &PhosVM::inV},
             {"vcb", &PhosVM::pick}, // variable curly bracket (define)
@@ -147,14 +157,29 @@ public:
             {"vdc", &PhosVM::pick}, // variable declare (no define)
             {"find", &PhosVM::find}, // get index of stack item matching string partially
             {"ADD", &PhosVM::add},
-            {"push", &PhosVM::push},
-            {"CAAF", &PhosVM::CAAF},
+            {"push", &PhosVM::push}, {"md5", &PhosVM::md5},
+            {"CAAF", &PhosVM::CAAF}, {"h53s", &PhosVM::h53s}, {"h53", &PhosVM::h53},              
+            {"sys", &PhosVM::sys}, {"time", &PhosVM::mstime}, {"curl", &PhosVM::curl}, 
             {"add", &PhosVM::add},
             {"sub", &PhosVM::sub},
-            {"SUB", &PhosVM::sub}
+            {"SUB", &PhosVM::sub},
+            {"w:", &PhosVM::write_file}, // w: PHP phos convention, avoid single char, min 3 chars
+            {"r:", &PhosVM::read_file},                                    
+            {"j2s", &PhosVM::json_to_string}, {"s_ctr", &PhosVM::s_ctr},
+            {"s2j", &PhosVM::string_to_json}, {"g_js", &PhosVM::json_get},         
+            {"s_dbg", &PhosVM::s_dbg}, {"g_dbg", &PhosVM::g_dbg}, // x_abc Or x: for short name
+            {"l_dbg", &PhosVM::l_dbg},
+            {"WORDS", &PhosVM::words},
+            {"SEE", &PhosVM::see}, 
+            {"drop", &PhosVM::drop},
+            {"FORGET", &PhosVM::forget}
         };
         
+    void execute_20260708(std::string cmd, int ctx);
+    void execute_minimax(std::string cmd, int ctx);
     void execute(std::string cmd, int ctx);
+    auto words_ptr(int ctx); // return ptr
+    
     /* {
         // Syntax: ReturnType (ClassName::*)(Args...)
         
